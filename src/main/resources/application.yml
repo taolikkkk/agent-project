@@ -89,7 +89,7 @@ langchain4j:
       auth:
         uri: ${NEO4J_URI:bolt://localhost:7687}
         user: ${NEO4J_USERNAME:neo4j}
-        password: ${NEO4J_PASSWORD:}
+        password: ${NEO4J_PASSWORD:neo4j666}
 elasticsearch:
   host: ${ELASTICSEARCH_URL:http://127.0.0.1:9200}
   base-url: ${EMBEDDING_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
