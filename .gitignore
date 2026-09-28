@@ -1,0 +1,13 @@
+target/
+frontend/node_modules/
+frontend/dist/
+frontend/playwright-report/
+frontend/test-results/
+logs/
+.env
+application-local.yml
+.DS_Store
+.idea/
+*.iml
+
+.verification/
