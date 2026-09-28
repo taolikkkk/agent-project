@@ -9,7 +9,7 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: Object.fromEntries(['/auth', '/api', '/chat/'].map(path => [path, {
-      target: process.env.BACKEND_URL || 'http://127.0.0.1:8010',
+      target: process.env.BACKEND_URL || 'http://127.0.0.1:8009',
       changeOrigin: true,
       timeout: 600000,
       proxyTimeout: 600000,
