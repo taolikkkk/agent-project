@@ -123,6 +123,19 @@ public class FileStorageService {
                 .build());
     }
 
+    /**
+     * 删除当前 MinIO 存储中的文件；非当前存储生成的地址不处理。
+     *
+     * @return 是否删除了当前 MinIO 中的对象
+     */
+    public boolean deleteStoredFile(String url) throws Exception {
+        if (!isStoredFile(url)) {
+            return false;
+        }
+        deleteFile(storedObjectName(url));
+        return true;
+    }
+
     // 生成临时下载链接（带签名，有效期 7 天）
     public String getPresignedUrl(String objectName) throws Exception {
         return minioClient.getPresignedObjectUrl(

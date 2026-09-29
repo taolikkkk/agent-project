@@ -3,6 +3,7 @@ package cn.hollis.llm.mentor.know.engine.document.service;
 import io.minio.BucketExistsArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import io.minio.RemoveObjectArgs;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockMultipartFile;
@@ -40,5 +41,22 @@ class FileStorageServiceTest {
         assertFalse(special.contains("?"));
         assertFalse(special.contains("#"));
         assertTrue(storage.storedObjectName(special).endsWith("converted/中文?#版本.md"));
+    }
+
+    @Test
+    void deletionOnlyRemovesObjectsOwnedByCurrentMinioStorage() throws Exception {
+        MinioClient minio = mock(MinioClient.class);
+        FileStorageService storage = new FileStorageService();
+        ReflectionTestUtils.setField(storage, "minioClient", minio);
+        ReflectionTestUtils.setField(storage, "bucketName", "knowledge");
+        ReflectionTestUtils.setField(storage, "endpoint", "http://localhost:9000");
+
+        assertTrue(storage.deleteStoredFile("http://localhost:9000/knowledge/original/guide.md"));
+        assertFalse(storage.deleteStoredFile("https://files.example.com/guide.md"));
+
+        ArgumentCaptor<RemoveObjectArgs> deleted = ArgumentCaptor.forClass(RemoveObjectArgs.class);
+        verify(minio).removeObject(deleted.capture());
+        assertEquals("knowledge", deleted.getValue().bucket());
+        assertEquals("original/guide.md", deleted.getValue().object());
     }
 }

@@ -11,6 +11,7 @@ import cn.hollis.llm.mentor.know.engine.document.mapper.KnowledgeDocumentMapper;
 import cn.hollis.llm.mentor.know.engine.document.mapper.KnowledgeDocumentVersionMapper;
 import cn.hollis.llm.mentor.know.engine.document.mapper.KnowledgeSegmentMapper;
 import cn.hollis.llm.mentor.know.engine.document.service.DocumentCleanupService;
+import cn.hollis.llm.mentor.know.engine.document.service.FileStorageService;
 import cn.hollis.llm.mentor.know.engine.document.service.KnowledgeDocumentService;
 import cn.hollis.llm.mentor.know.engine.document.service.impl.ExcelProcessServiceImpl;
 import cn.hollis.llm.mentor.know.engine.document.service.KnowledgeDocumentVersionService;
@@ -32,6 +33,7 @@ import org.springframework.util.Assert;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Stream;
 
 /**
  * 知识文档表 Service 实现类
@@ -57,6 +59,9 @@ public class KnowledgeDocumentServiceImpl extends ServiceImpl<KnowledgeDocumentM
 
     @Autowired
     private VectorStoreService vectorStoreService;
+
+    @Autowired
+    private FileStorageService fileStorageService;
 
     @Autowired
     private ApplicationEventPublisher eventPublisher;
@@ -92,6 +97,8 @@ public class KnowledgeDocumentServiceImpl extends ServiceImpl<KnowledgeDocumentM
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean removeDocumentWithSegments(Long docId) {
+        List<String> fileUrls = fileUrlsOf(docId);
+
         // 按 metadata 中的 docId 删除该文档所有向量
         deleteVectorsByDocId(docId);
 
@@ -107,6 +114,7 @@ public class KnowledgeDocumentServiceImpl extends ServiceImpl<KnowledgeDocumentM
         // 物理删除文档本身
         boolean removed = baseMapper.physicalDeleteByDocId(docId) > 0;
         if (removed) {
+            deleteStoredFiles(fileUrls);
             eventPublisher.publishEvent(new DocumentInvalidatedEvent(this, List.of(docId), null));
         }
         return removed;
@@ -124,6 +132,8 @@ public class KnowledgeDocumentServiceImpl extends ServiceImpl<KnowledgeDocumentM
         if (docIds == null || docIds.isEmpty()) {
             return false;
         }
+        List<String> fileUrls = docIds.stream().flatMap(docId -> fileUrlsOf(docId).stream()).distinct().toList();
+
         // 按 metadata 中的 docId 批量删除所有向量
         deleteVectorsByDocIds(docIds);
 
@@ -141,9 +151,28 @@ public class KnowledgeDocumentServiceImpl extends ServiceImpl<KnowledgeDocumentM
         // 物理删除文档本身
         boolean removed = baseMapper.physicalDeleteByDocIds(docIds) > 0;
         if (removed) {
+            deleteStoredFiles(fileUrls);
             eventPublisher.publishEvent(new DocumentInvalidatedEvent(this, docIds, null));
         }
         return removed;
+    }
+
+    private List<String> fileUrlsOf(Long docId) {
+        return knowledgeDocumentVersionService.listByDocId(docId).stream()
+                .flatMap(version -> Stream.of(version.getDocUrl(), version.getConvertedDocUrl()))
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+    }
+
+    private void deleteStoredFiles(List<String> fileUrls) {
+        try {
+            for (String fileUrl : fileUrls) {
+                fileStorageService.deleteStoredFile(fileUrl);
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException("删除 MinIO 文件失败", e);
+        }
     }
 
     /**

@@ -8,6 +8,7 @@ import cn.hollis.llm.mentor.know.engine.document.entity.KnowledgeDocumentVersion
 import cn.hollis.llm.mentor.know.engine.document.mapper.KnowledgeDocumentVersionMapper;
 import cn.hollis.llm.mentor.know.engine.document.mapper.KnowledgeSegmentMapper;
 import cn.hollis.llm.mentor.know.engine.document.service.DocumentCleanupService;
+import cn.hollis.llm.mentor.know.engine.document.service.FileStorageService;
 import cn.hollis.llm.mentor.know.engine.document.service.KnowledgeDocumentVersionService;
 import cn.hollis.llm.mentor.know.engine.document.service.VectorStoreService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -31,6 +32,8 @@ public class QaCacheDocumentInvalidationTest {
     private QaCacheMapperTest fixture;
     private AnnotationConfigApplicationContext context;
     private QaCacheProperties properties;
+    private FileStorageService fileStorageService;
+    private KnowledgeDocumentVersionService versionService;
 
     @BeforeEach
     void setup() throws Exception {
@@ -59,6 +62,11 @@ public class QaCacheDocumentInvalidationTest {
         ReflectionTestUtils.setField(fixture.documentService, "vectorStoreService", mock(VectorStoreService.class));
         ReflectionTestUtils.setField(fixture.documentService, "knowledgeSegmentMapper", mock(KnowledgeSegmentMapper.class));
         ReflectionTestUtils.setField(fixture.documentService, "knowledgeDocumentVersionMapper", mock(KnowledgeDocumentVersionMapper.class));
+        fileStorageService = mock(FileStorageService.class);
+        versionService = mock(KnowledgeDocumentVersionService.class);
+        when(versionService.listByDocId(anyLong())).thenReturn(List.of());
+        ReflectionTestUtils.setField(fixture.documentService, "fileStorageService", fileStorageService);
+        ReflectionTestUtils.setField(fixture.documentService, "knowledgeDocumentVersionService", versionService);
     }
 
     @AfterEach
@@ -156,6 +164,19 @@ public class QaCacheDocumentInvalidationTest {
         fixture.tx.executeWithoutResult(transaction -> assertTrue(fixture.documentService.removeDocumentsWithSegments(List.of(10L, 20L))));
         assertEquals("DISABLED", status("one"));
         assertEquals("DISABLED", status("other"));
+    }
+
+    @Test
+    void documentDeletionAlsoRemovesOriginalAndConvertedMinioFiles() throws Exception {
+        KnowledgeDocumentVersion version = new KnowledgeDocumentVersion();
+        version.setDocUrl("http://localhost:9000/know-engine/original/guide.md");
+        version.setConvertedDocUrl("http://localhost:9000/know-engine/converted/guide.md");
+        when(versionService.listByDocId(10L)).thenReturn(List.of(version));
+
+        fixture.tx.executeWithoutResult(transaction -> assertTrue(fixture.documentService.removeDocumentWithSegments(10L)));
+
+        verify(fileStorageService).deleteStoredFile(version.getDocUrl());
+        verify(fileStorageService).deleteStoredFile(version.getConvertedDocUrl());
     }
 
     @Test
