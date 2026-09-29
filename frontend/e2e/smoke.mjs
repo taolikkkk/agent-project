@@ -1,6 +1,6 @@
 import { chromium, expect } from '@playwright/test'
 import { mkdir } from 'node:fs/promises'
-const base = process.env.APP_URL || 'http://127.0.0.1:8010'
+const base = process.env.APP_URL || 'http://127.0.0.1:8009'
 const output = new URL('../../.verification/', import.meta.url).pathname
 await mkdir(output, { recursive: true })
 const browser = await chromium.launch({ channel: 'chrome', headless: true })

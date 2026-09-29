@@ -2,7 +2,7 @@ import { chromium, expect } from '@playwright/test'
 import { mkdir } from 'node:fs/promises'
 
 // 使用独立测试库的示例员工；测试创建的文档和会话在结束时删除。
-const base = process.env.APP_URL || 'http://127.0.0.1:8010'
+const base = process.env.APP_URL || 'http://127.0.0.1:8009'
 const output = new URL('../../.verification/', import.meta.url).pathname
 await mkdir(output, { recursive: true })
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
@@ -27,8 +27,13 @@ try {
   const uploadResponse = await uploaded
   expect(uploadResponse.ok()).toBeTruthy()
   docId = (await uploadResponse.json()).docId
-  const split = await api.post(`${base}/api/document/split/${docId}`, { params: { splitType: 'LENGTH', chunkSize: 500, overlap: 50 } })
-  expect(split.ok()).toBeTruthy()
+  await page.waitForURL(/\/documents/)
+  await expect(page.getByRole('dialog', { name: '切分文档' })).toBeVisible()
+  await page.getByLabel('切分方式').click()
+  await page.getByText('按长度切分', { exact: true }).last().click()
+  const splitResponse = page.waitForResponse(response => response.url().includes(`/api/document/split/${docId}`))
+  await page.getByRole('button', { name: '开始切分', exact: true }).click()
+  expect((await splitResponse).ok()).toBeTruthy()
   await expect.poll(async () => (await (await api.get(`${base}/api/document/${docId}`)).json()).status, { timeout: 60000 }).toBe('VECTOR_STORED')
 
   // 同名文件上传新版本后，两个版本的原文和转换文件必须保持独立。

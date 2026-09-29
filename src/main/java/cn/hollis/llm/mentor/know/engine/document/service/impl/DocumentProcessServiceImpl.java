@@ -300,11 +300,16 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
 
         int segmentCount = knowledgeSegments.size();
 
-        // 6. 更新文档状态为 CHUNKED，并保存分段参数
+        // 6. 保存本次分段参数，便于后续查看与复用。
+        document.setSplitParam(documentSplitParam);
+        boolean splitParamSaved = knowledgeDocumentService.updateById(document);
+        Assert.isTrue(splitParamSaved, "保存分段参数失败");
+
+        // 7. 更新文档状态为 CHUNKED
         boolean advanceResult = knowledgeDocumentService.advanceDocumentAndVersionStatus(document.getDocId(), document.getCurrentVersionId(), DocumentStatus.CHUNKED);
         Assert.isTrue(advanceResult, "更新文档版本状态失败");
 
-        // 发送文档已分段事件
+        // 8. 发送文档已分段事件
         publishChunkedEvent(document, segmentCount);
 
         return segmentCount;

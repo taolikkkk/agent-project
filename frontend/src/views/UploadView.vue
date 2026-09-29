@@ -41,9 +41,14 @@ async function submit() {
   else { form.append('title', title.value.trim()); form.append('description', description.value.trim()); form.append('knowledgeBaseType', knowledgeBaseType.value); form.append('accessibleBy', accessibleBy.value); if (tableName.value) form.append('tableName', tableName.value) }
   busy.value = true
   try {
-    await api<KnowledgeDocument>(`/api/document/${newVersion.value ? 'upload-version' : 'upload'}`, { method: 'POST', body: form })
-    ElMessage.success('上传成功，文档正在处理')
-    await router.push('/documents')
+    const document = await api<KnowledgeDocument>(`/api/document/${newVersion.value ? 'upload-version' : 'upload'}`, { method: 'POST', body: form })
+    if (document.knowledgeBaseType === 'DOCUMENT_SEARCH') {
+      ElMessage.success('上传成功，请设置切分方式')
+      await router.push({ path: '/documents', query: { docId: String(document.docId), next: 'split' } })
+    } else {
+      ElMessage.success('上传成功，数据表正在准备')
+      await router.push('/documents')
+    }
   } catch (e) { error.value = (e as Error).message }
   finally { busy.value = false }
 }
