@@ -121,6 +121,10 @@ public class DocumentCompensationJob {
                     boolean success = documentProcessService.embedAndStore(documentVersion);
 
                     if (success) {
+                        knowledgeDocumentService.advanceDocumentAndVersionStatus(
+                                documentVersion.getDocId(),
+                                documentVersion.getVersionId(),
+                                DocumentStatus.VECTOR_STORED);
                         // 更新重试次数
                         log.info("向量化补偿成功，documentId: {} , version: {}", documentVersion.getDocId(), documentVersion.getVersion());
                         successCount++;
