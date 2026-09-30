@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api, json, query } from '../api/http'
@@ -36,6 +36,8 @@ const splitOptions = [
 const selectedSplitOption = computed(() => splitOptions.find(option => option.value === split.splitType) ?? splitOptions[0])
 const usesManualOverlap = computed(() => split.splitType !== 'SMART')
 const splitDescription = computed(() => `将使用「${selectedSplitOption.value.label}」生成知识片段；提交后系统会自动建立检索索引。`)
+const needsStatusRefresh = computed(() => rows.value.some(document => ['UPLOADED', 'CONVERTING', 'CHUNKED'].includes(document.status)))
+let statusPollingTimer: number | undefined
 const statuses: Record<string,string> = { UPLOADED: '已上传', CONVERTING: '解析中', CONVERTED: '待切分', CHUNKED: '已切分', VECTOR_STORED: '可检索', STORED: '已存储' }
 const permissions: Record<string,string> = { VISITOR: '所有用户', OWNER: '车主及客服', CUSTOMER_SERVICE: '仅客服员工' }
 function date(value?: string) { return value ? value.replace('T',' ').slice(0,16) : '暂无记录' }
@@ -47,6 +49,17 @@ async function load(reset = false) {
   try { const result = await api<Page<KnowledgeDocument>>(`/api/document/page?${query({ ...filters, current: page.value, size: 10 })}`); rows.value = result.records; total.value = Number(result.total) }
   catch (e) { error.value = (e as Error).message }
   finally { loading.value = false }
+}
+function startStatusPolling() {
+  if (statusPollingTimer) return
+  statusPollingTimer = window.setInterval(() => {
+    if (!loading.value && needsStatusRefresh.value) void load()
+  }, 3000)
+}
+function stopStatusPolling() {
+  if (!statusPollingTimer) return
+  window.clearInterval(statusPollingTimer)
+  statusPollingTimer = undefined
 }
 async function continueUploadFlow() {
   if (route.query.next !== 'split' || typeof route.query.docId !== 'string') return
@@ -60,7 +73,9 @@ async function continueUploadFlow() {
   finally { await router.replace('/documents') }
 }
 onMounted(async () => { await load(); await continueUploadFlow() })
+onBeforeUnmount(stopStatusPolling)
 watch(page, () => load())
+watch(needsStatusRefresh, active => active ? startStatusPolling() : stopStatusPolling())
 async function remove(doc?: KnowledgeDocument) {
   const items = doc ? [doc] : selected.value
   try {
