@@ -14,6 +14,8 @@ public class MemoryConfig {
         return memoryId -> MessageWindowChatMemory.builder()
                 .id(memoryId) // 设置记忆ID
                 .maxMessages(10) // 每个会话保留10条
+                // 兼容要求 system 消息处于首位的 OpenAI 兼容模型服务。
+                .alwaysKeepSystemMessageFirst(true)
                 .build();
     }
 }

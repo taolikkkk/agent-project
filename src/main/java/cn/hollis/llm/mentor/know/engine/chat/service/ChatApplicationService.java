@@ -144,7 +144,14 @@ public class ChatApplicationService {
     @PostConstruct
     public void init() {
         intentRecognitionService = AiServices.builder(IntentRecognitionService.class).chatModel(chatModel)
-                .chatMemoryProvider(memoryId -> MessageWindowChatMemory.builder().id(memoryId).maxMessages(10).chatMemoryStore(databaseChatMemoryStore).build()).build();
+                .chatMemoryProvider(memoryId -> MessageWindowChatMemory.builder()
+                        .id(memoryId)
+                        .maxMessages(10)
+                        .chatMemoryStore(databaseChatMemoryStore)
+                        // 部署在远程的 Qwen chat template 要求 system 消息必须位于首位。
+                        .alwaysKeepSystemMessageFirst(true)
+                        .build())
+                .build();
     }
 
     /**
@@ -233,7 +240,10 @@ public class ChatApplicationService {
                     }
                     return result;
                 })
-                .doOnError(e -> log.error("流式对话异常: conversationId={}", finalConversationId, e))
+                .onErrorResume(e -> {
+                    log.error("流式对话异常: conversationId={}", finalConversationId, e);
+                    return Flux.just("[ERROR]:模型服务暂时不可用，请稍后重试。");
+                })
                 .concatWith(Mono.fromCallable(() -> chatMessageService.getByMessageId(assistantMessageId))
                             .subscribeOn(Schedulers.boundedElastic())
                             .filter(message -> message.getContent() != null && !message.getContent().isBlank())
@@ -405,6 +415,8 @@ public class ChatApplicationService {
                                     .id(memoryId)
                                     .maxMessages(10)
                                     .chatMemoryStore(databaseChatMemoryStore)
+                                    // RAG 对话同样需要保证动态 system prompt 位于历史消息之前。
+                                    .alwaysKeepSystemMessageFirst(true)
                                     .build())
                             .systemMessage(prompt)
                             .retrievalAugmentor(retrievalAugmentor)
