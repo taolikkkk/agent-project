@@ -62,7 +62,7 @@ public class KnowEngineNeo4jContentRetriever implements ContentRetriever {
 
         // Cypher 结构化查询结果直接透传，不参与后续重排序/融合
         return results.stream()
-                .map(ContentUtil::markAsSkipRerank)
+                .map(ContentUtil::markAsGraphResult)
                 .collect(Collectors.toList());
     }
 

@@ -47,6 +47,17 @@ async function remove(c: Conversation) {
 }
 function showReferences(refs: Reference[]) { references.value = refs; referencesOpen.value = true }
 function safeUrl(url?: string) { return url && /^https?:\/\//i.test(url) ? url : undefined }
+function isGraphReference(reference: Reference) { return reference.retrievalSource === 'GRAPH_DB' || (!reference.documentTitle && reference.documentId === 'null') }
+const graphReferences = computed(() => references.value.filter(isGraphReference))
+const documentReferences = computed(() => references.value.filter(reference => !isGraphReference(reference)))
+function graphResult(reference: Reference) {
+  const value = reference.chunkContent?.trim() || '未返回可展示的图谱数据'
+  try { const parsed = JSON.parse(value); return typeof parsed === 'string' ? parsed : value } catch { return value.replace(/^"|"$/g, '') }
+}
+function referenceButtonLabel(refs: Reference[]) {
+  const graphCount = refs.filter(isGraphReference).length
+  return graphCount ? `查看 ${graphCount} 项图谱结果${refs.length > graphCount ? `及 ${refs.length - graphCount} 条文档依据` : ''}` : `查看 ${refs.length} 条参考资料`
+}
 async function feedback(message: Message, helpful: boolean) {
   try { await api(`/chat/message/${message.messageId}/feedback`, json('POST', { helpful })); message.helpful = helpful }
   catch (e) { ElMessage.error((e as Error).message) }
@@ -118,11 +129,25 @@ function enter(event: KeyboardEvent) { if (!event.shiftKey && !event.isComposing
       <div ref="feed" class="chat-feed" aria-live="polite" aria-relevant="additions text">
         <div v-if="!messages.length && !loading" class="chat-welcome"><span class="welcome-symbol"><AppIcon name="books" :size="34" /></span><h1>今天，想了解些什么？</h1><p>从你的问题出发，在知识中寻找答案。</p><div class="suggestion-list"><button v-for="suggestion in suggestions" :key="suggestion" @click="draft = suggestion"><AppIcon name="chat" :size="17" /><span>{{ suggestion }}</span><AppIcon name="right" :size="16" /></button></div></div>
         <el-skeleton v-else-if="loading && !messages.length" :rows="5" class="chat-skeleton" />
-        <div v-else class="message-list"><article v-for="(message, index) in messages" :key="message.messageId || index" class="message" :class="message.type.toLowerCase()"><div class="message-author"><span class="message-icon"><AppIcon v-if="message.type === 'ASSISTANT'" name="books" :size="18" /><span v-else>你</span></span><strong>{{ message.type === 'ASSISTANT' ? 'KnowEngine' : '你' }}</strong><span v-if="message.cacheHit" class="status-tag good">已审核回答</span></div><div class="message-body"><p v-if="message.type === 'USER'" class="user-content">{{ message.content }}</p><MarkdownText v-else-if="message.content" :text="message.content" /><div v-if="message.progress" class="message-progress"><span class="progress-line" />{{ message.progress }}</div><p v-if="message.error" class="inline-error" role="alert">{{ message.error }}</p><div v-if="message.cards" class="car-choices"><button v-for="(car, carIndex) in choices(message)" :key="carIndex" :disabled="streaming" @click="chooseCar(car)"><AppIcon name="car" /><span>{{ carName(car) }}</span><AppIcon name="right" :size="15" /></button></div><button v-if="message.ragReferences?.length" class="reference-button" @click="showReferences(message.ragReferences)"><AppIcon name="book" :size="16" />查看 {{ message.ragReferences.length }} 条参考资料<AppIcon name="next" :size="14" /></button><div v-if="message.type === 'ASSISTANT' && message.content && (!streaming || index !== messages.length - 1)" class="message-actions"><button class="icon-button" aria-label="复制回答" @click="copy(message.content)"><AppIcon name="copy" :size="16" /></button><template v-if="message.messageId"><button class="icon-button" :class="{ 'is-selected': message.helpful === true }" :disabled="message.helpful != null" aria-label="有帮助" @click="feedback(message, true)"><AppIcon name="like" :size="16" /></button><button class="icon-button" :class="{ 'is-selected': message.helpful === false }" :disabled="message.helpful != null" aria-label="没有帮助" @click="feedback(message, false)"><AppIcon name="dislike" :size="16" /></button></template></div></div></article></div>
+        <div v-else class="message-list"><article v-for="(message, index) in messages" :key="message.messageId || index" class="message" :class="message.type.toLowerCase()"><div class="message-author"><span class="message-icon"><AppIcon v-if="message.type === 'ASSISTANT'" name="books" :size="18" /><span v-else>你</span></span><strong>{{ message.type === 'ASSISTANT' ? 'KnowEngine' : '你' }}</strong><span v-if="message.cacheHit" class="status-tag good">已审核回答</span></div><div class="message-body"><p v-if="message.type === 'USER'" class="user-content">{{ message.content }}</p><MarkdownText v-else-if="message.content" :text="message.content" /><div v-if="message.progress" class="message-progress"><span class="progress-line" />{{ message.progress }}</div><p v-if="message.error" class="inline-error" role="alert">{{ message.error }}</p><div v-if="message.cards" class="car-choices"><button v-for="(car, carIndex) in choices(message)" :key="carIndex" :disabled="streaming" @click="chooseCar(car)"><AppIcon name="car" /><span>{{ carName(car) }}</span><AppIcon name="right" :size="15" /></button></div><button v-if="message.ragReferences?.length" class="reference-button" @click="showReferences(message.ragReferences)"><AppIcon name="book" :size="16" />{{ referenceButtonLabel(message.ragReferences) }}<AppIcon name="next" :size="14" /></button><div v-if="message.type === 'ASSISTANT' && message.content && (!streaming || index !== messages.length - 1)" class="message-actions"><button class="icon-button" aria-label="复制回答" @click="copy(message.content)"><AppIcon name="copy" :size="16" /></button><template v-if="message.messageId"><button class="icon-button" :class="{ 'is-selected': message.helpful === true }" :disabled="message.helpful != null" aria-label="有帮助" @click="feedback(message, true)"><AppIcon name="like" :size="16" /></button><button class="icon-button" :class="{ 'is-selected': message.helpful === false }" :disabled="message.helpful != null" aria-label="没有帮助" @click="feedback(message, false)"><AppIcon name="dislike" :size="16" /></button></template></div></div></article></div>
       </div>
       <form class="composer-area" @submit.prevent="send"><div class="composer"><label class="composer-label" for="question">你的问题</label><textarea id="question" v-model="draft" rows="2" placeholder="输入问题，开始与知识对话…" :disabled="streaming" @keydown.enter="enter" /><div class="composer-bottom"><span>Enter 发送，Shift + Enter 换行</span><button v-if="streaming" type="button" class="send-button" aria-label="停止生成" @click="controller?.abort()"><AppIcon name="stop" :size="18" /></button><button v-else class="send-button" type="submit" :disabled="!draft.trim() || loading" aria-label="发送问题"><AppIcon name="send" :size="21" /></button></div></div><p class="composer-note">回答由模型生成，重要信息请结合参考资料核实。</p></form>
     </div>
-    <el-drawer v-model="referencesOpen" title="参考资料" size="420px"><p class="muted">回答所引用的知识片段，可进一步查看原文。</p><div class="reference-list"><article v-for="(reference, index) in references" :key="index" class="reference-item"><h3>{{ reference.documentTitle || '知识资料' }}</h3><p>{{ reference.chunkContent }}</p><a v-if="safeUrl(reference.url)" :href="safeUrl(reference.url)" target="_blank" rel="noopener noreferrer">查看原文<AppIcon name="external" :size="14" /></a></article></div></el-drawer>
+    <el-drawer v-model="referencesOpen" title="参考资料" size="420px">
+      <p class="reference-intro">{{ graphReferences.length ? '图谱结果来自 Neo4j 的实体关系查询；知识库文档可打开原文核验。' : '回答所引用的知识片段，可进一步查看原文。' }}</p>
+      <div class="reference-list">
+        <article v-if="graphReferences.length" class="reference-item graph-reference">
+          <div class="reference-heading"><span class="reference-source graph">Neo4j 图数据库</span><h3>图谱关系结果</h3></div>
+          <p class="reference-description">查询到的实体或关系如下：</p>
+          <ul class="graph-results"><li v-for="(reference, index) in graphReferences" :key="`graph-${index}`">{{ graphResult(reference) }}</li></ul>
+        </article>
+        <article v-for="(reference, index) in documentReferences" :key="`document-${index}`" class="reference-item">
+          <div class="reference-heading"><span class="reference-source">知识库文档</span><h3>{{ reference.documentTitle || '知识资料' }}</h3></div>
+          <p>{{ reference.chunkContent }}</p>
+          <a v-if="safeUrl(reference.url)" :href="safeUrl(reference.url)" target="_blank" rel="noopener noreferrer">查看原文<AppIcon name="external" :size="14" /></a>
+        </article>
+      </div>
+    </el-drawer>
   </section>
 </template>
 
@@ -170,6 +195,19 @@ function enter(event: KeyboardEvent) { if (!event.shiftKey && !event.isComposing
 .message-actions { display: flex; gap: 3px; margin-top: 12px; }
 .is-selected { color: var(--accent); background: var(--accent-soft); opacity: 1; }
 .reference-button { margin-top: 17px; border: 1px solid var(--line); background: var(--surface); color: var(--accent); display: inline-flex; gap: 8px; align-items: center; padding: 8px 12px; font-size: 11px; border-radius: 7px; }
+.reference-intro { color: var(--muted); font-size: 12px; line-height: 1.7; margin: 0 0 16px; }
+.reference-list { display: grid; gap: 12px; }
+.reference-item { border: 1px solid var(--line); border-radius: 10px; padding: 15px; background: var(--surface); }
+.reference-heading { display: flex; align-items: center; gap: 9px; margin-bottom: 11px; }
+.reference-heading h3 { font-size: 14px; margin: 0; }
+.reference-source { color: var(--muted); background: var(--hover); border-radius: 999px; padding: 3px 7px; font-size: 10px; white-space: nowrap; }
+.reference-source.graph { background: #e5f1eb; color: var(--accent); }
+.reference-item > p { color: var(--muted); font-size: 12px; white-space: pre-wrap; line-height: 1.7; margin: 0; }
+.reference-item a { color: var(--accent); display: inline-flex; align-items: center; gap: 5px; font-size: 12px; margin-top: 13px; }
+.graph-reference { background: #f7fbf8; border-color: #cfe3d7; }
+.reference-description { margin-bottom: 8px !important; }
+.graph-results { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.graph-results li { background: var(--surface); border: 1px solid #d9e9df; border-radius: 7px; color: var(--text); font-size: 12px; line-height: 1.6; padding: 9px 10px; }
 .composer-area { padding: 10px 34px 16px; flex-shrink: 0; max-width: 860px; width: 100%; margin: 0 auto; }
 .composer { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); padding: 15px 18px 12px; box-shadow: 0 4px 18px #2b513809; }
 .composer:focus-within { border-color: var(--accent); }

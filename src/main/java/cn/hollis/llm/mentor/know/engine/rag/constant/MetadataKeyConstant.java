@@ -76,4 +76,9 @@ public class MetadataKeyConstant {
      * 跳过重排序/融合标记，true表示该内容来自结构化查询（SQL/Cypher），不需要参与重排序和融合
      */
     public static final String SKIP_RERANK = "skipRerank";
+
+    /**
+     * 图数据库查询结果标记，便于在引用区域按来源展示。
+     */
+    public static final String GRAPH_RESULT = "graphResult";
 }

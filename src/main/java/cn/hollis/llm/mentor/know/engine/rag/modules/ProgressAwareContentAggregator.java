@@ -62,20 +62,31 @@ public class ProgressAwareContentAggregator implements ContentAggregator {
         List<Content> results = delegate.aggregate(queryToContents);
 
         try {
-            // 文档维度的RAG引用信息，用于前端展示
+            // 文档按文档维度展示；图数据库结果没有文档 ID，单独保留为图谱引用。
             List<ChatMessage.RagReference> ragReferencesDocs = results.stream()
+                    .filter(content -> !ContentUtil.isGraphResult(content))
+                    .filter(content -> content.textSegment().metadata().getInteger(DOC_ID) != null)
                     .collect(Collectors.toMap(
                             content -> content.textSegment().metadata().getInteger(DOC_ID),
                             content -> content,
-                            (existing, replacement) -> existing
+                            (existing, replacement) -> existing,
+                            LinkedHashMap::new
                     )).values().stream()
                     .map(content -> ReferenceUtil.getRagReference(content, RetrievalSource.HYBRID))
                     .collect(Collectors.toList());
 
-            // chunk维度的RAG引用信息，用于数据持久化
+            List<ChatMessage.RagReference> graphReferences = results.stream()
+                    .filter(ContentUtil::isGraphResult)
+                    .map(content -> ReferenceUtil.getRagReference(content, RetrievalSource.GRAPH_DB))
+                    .collect(Collectors.toList());
+            ragReferencesDocs.addAll(graphReferences);
+
+            // 持久化引用时保留知识库分段与图谱结果，避免重新打开会话后丢失图谱来源。
             List<ChatMessage.RagReference> ragReferenceChunks = results.stream()
+                    .filter(content -> ContentUtil.isGraphResult(content)
+                            || content.textSegment().metadata().getString(CHUNK_ID) != null)
                     .collect(Collectors.toMap(
-                            content -> content.textSegment().metadata().getString(CHUNK_ID),
+                            this::referenceKey,
                             content -> content,
                             (existing, replacement) -> existing,
                             LinkedHashMap::new
@@ -86,9 +97,6 @@ public class ProgressAwareContentAggregator implements ContentAggregator {
             if (!CollectionUtils.isEmpty(ragReferenceChunks) && chatMessageService != null && chatMessageId != null) {
                 chatMessageService.updateRagReferences(chatMessageId, ragReferenceChunks);
             }
-
-            // 过滤掉chunkId为空的引用，一般是非知识库检索得到的结果
-            ragReferencesDocs = ragReferencesDocs.stream().filter(reference -> reference.getChunkId() != null).collect(Collectors.toList());
 
             if (progressCallback != null && !CollectionUtils.isEmpty(ragReferencesDocs)) {
                 progressCallback.accept("[REFERENCE]:" + JSON.toJSONString(ragReferencesDocs));
@@ -107,4 +115,11 @@ public class ProgressAwareContentAggregator implements ContentAggregator {
 
         return results;
     }
+
+
+    private String referenceKey(Content content) {
+        String chunkId = content.textSegment().metadata().getString(CHUNK_ID);
+        return chunkId != null ? "chunk:" + chunkId : "graph:" + content.textSegment().text();
+    }
+
 }

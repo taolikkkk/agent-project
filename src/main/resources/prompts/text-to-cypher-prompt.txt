@@ -29,11 +29,15 @@ Cypher：MATCH (model3:CarVersion {infoId: 'CI_001'})-[:USES_PART]->(p:Part)<-[:
 问题：使用了宁德时代电池的车有哪些？
 Cypher：MATCH (p:Part {name: '宁德时代三元锂电池 75kWh'})<-[:USES_PART]-(v:CarVersion) RETURN v.name AS versionName
 
+问题：哪些车搭配了空气悬架？
+Cypher：MATCH (v:CarVersion)-[:USES_PART]->(p:Part {name: '空气悬架系统'}) RETURN v.name + ' → 搭载 → ' + p.name AS relation
+
 # 要求
 1. 只返回Cypher查询语句，不需要包含任何解释和说明
 2. 确保Cypher语法正确
 3. 只使用Schema中提供的节点标签、关系类型和属性
 4. 如果根据所提供的Schema无法做查询，请直接返回空字符串""
 5. 禁止执行任何写操作（CREATE、MERGE、SET、DELETE、REMOVE等）
+6. 关系查询必须返回能够读懂关系的文本，例如“车型 → 搭载 → 配件”；不要只返回孤立的名称、ID 或编码。
 
 用户问题是：{{question}}

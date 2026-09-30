@@ -1,5 +1,5 @@
 package cn.hollis.llm.mentor.know.engine.chat.constant;
 
 public enum RetrievalSource {
-    VECTOR, KEYWORD, HYBRID, RERANK
+    VECTOR, KEYWORD, HYBRID, RERANK, GRAPH_DB
 }
