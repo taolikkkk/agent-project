@@ -195,6 +195,10 @@ public class ChatApplicationService {
         String messageId = chatMessageService.saveUserMessage(finalConversationId, content);
         String assistantMessageId = chatMessageService.saveAssistantMessage(finalConversationId);
 
+        // 旧版本可能将 system prompt 以错误顺序写入 Redis；每轮从数据库加载纯对话记录，
+        // 由当前内存窗口重新把 system prompt 放到首位。
+        databaseChatMemoryStore.evictCache(finalConversationId);
+
         // 3. 流式返回：先发送意图识别进度，再执行意图识别
         Flux<String> normalAnswer = Flux.just("[PROGRESS]:正在识别您的意图...")
                 .concatWith(
