@@ -19,12 +19,14 @@ const version = ref(newVersion.value ? '' : '1.0.0')
 const knowledgeBaseType = ref('DOCUMENT_SEARCH')
 const accessibleBy = ref('VISITOR')
 const tableName = ref('')
+const isCsvFile = computed(() => Boolean(selected.value && /\.csv$/i.test(selected.value.name)))
 function choose(file?: File) {
   error.value = ''
   if (!file) return
   if (file.size > 100 * 1024 * 1024) { error.value = '单个文件不能超过 100 MB'; return }
   if (!/\.(pdf|doc|docx|xls|xlsx|csv|md|txt)$/i.test(file.name)) { error.value = '请选择 PDF、Word、Excel、CSV、Markdown 或 TXT 文件'; return }
   selected.value = file
+  if (isCsvFile.value) knowledgeBaseType.value = 'DATA_QUERY'
   if (!title.value) title.value = file.name.replace(/\.[^.]+$/, '')
 }
 function drop(event: DragEvent) { dragging.value = false; if (!busy.value) choose(event.dataTransfer?.files[0]) }
@@ -57,7 +59,7 @@ async function submit() {
   <section class="page upload-page"><div class="page-heading"><div><h1>{{ newVersion ? '上传新版本' : '知识文档上传' }}</h1><p class="muted">{{ newVersion ? '更新文档内容，保留可追溯的版本记录。' : '把分散的信息，整理成可检索的知识。' }}</p></div><el-button @click="router.push('/documents')"><AppIcon name="back" :size="16" />返回文档管理</el-button></div>
     <div class="upload-layout"><form class="panel panel-content" @submit.prevent="submit"><input ref="picker" type="file" class="file-input" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.md,.txt" :disabled="busy" aria-label="选择知识文档" @change="choose(($event.target as HTMLInputElement).files?.[0])" /><button type="button" class="upload-drop" :class="{ dragging, chosen: selected }" :disabled="busy" @click="picker?.click()" @dragover.prevent="dragging = true" @dragleave="dragging = false" @drop.prevent="drop"><span class="upload-symbol"><AppIcon :name="selected ? 'file' : 'upload'" :size="29" /></span><strong>{{ selected ? selected.name : '拖拽文件到此处，或点击选择' }}</strong><small>{{ selected ? `${(selected.size / 1024).toFixed(1)} KB · 点击更换文件` : 'PDF、Word、Excel、CSV、Markdown、TXT' }}</small><span v-if="!selected" class="upload-limit">单个文件不超过 100 MB</span></button>
       <div v-if="!newVersion" class="field"><label for="doc-title">文档标题</label><el-input id="doc-title" v-model="title" placeholder="使用清晰、易于检索的名称" maxlength="200" :disabled="busy" /></div>
-      <div class="field-pair"><div v-if="!newVersion" class="field"><label for="knowledge-type">知识库类型</label><el-select id="knowledge-type" v-model="knowledgeBaseType" :disabled="busy"><el-option label="文档搜索" value="DOCUMENT_SEARCH" /><el-option label="数据查询" value="DATA_QUERY" /></el-select></div><div class="field"><label for="version">版本号</label><el-input id="version" v-model="version" placeholder="例如 1.0.0" :disabled="busy" /><small v-if="newVersion">新版本号需要高于现有版本。</small></div></div>
+      <div class="field-pair"><div v-if="!newVersion" class="field"><label for="knowledge-type">知识库类型</label><el-select id="knowledge-type" v-model="knowledgeBaseType" :disabled="busy || isCsvFile"><el-option v-if="!isCsvFile" label="文档搜索" value="DOCUMENT_SEARCH" /><el-option label="数据查询" value="DATA_QUERY" /></el-select><small v-if="isCsvFile">CSV 文件仅支持数据查询；更换为其他格式后可选择文档搜索。</small></div><div class="field"><label for="version">版本号</label><el-input id="version" v-model="version" placeholder="例如 1.0.0" :disabled="busy" /><small v-if="newVersion">新版本号需要高于现有版本。</small></div></div>
       <div v-if="!newVersion && knowledgeBaseType === 'DATA_QUERY'" class="field"><label for="table-name">数据表名</label><el-input id="table-name" v-model="tableName" placeholder="例如 vehicle_service_records" :disabled="busy" /><small>使用小写字母、数字和下划线，以字母开头。</small></div>
       <div v-if="!newVersion" class="field"><label for="permission">可见范围</label><el-select id="permission" v-model="accessibleBy" :disabled="busy"><el-option label="所有用户" value="VISITOR" /><el-option label="车主及客服" value="OWNER" /><el-option label="仅客服员工" value="CUSTOMER_SERVICE" /></el-select><small>检索结果会按照当前用户的身份进行过滤。</small></div>
       <div class="field"><label for="description">{{ newVersion ? '版本变更说明' : '文档描述' }}</label><el-input id="description" v-model="description" type="textarea" :rows="3" :placeholder="newVersion ? '说明本次更新的主要内容' : '简要说明文档内容和适用场景'" :disabled="busy" /></div><p v-if="error" class="inline-error" role="alert">{{ error }}</p><el-alert v-if="busy" title="文件正在上传与解析，请保持页面打开。" type="info" :closable="false" /><div class="form-actions"><el-button :disabled="busy" @click="router.push('/documents')">取消</el-button><el-button native-type="submit" type="primary" :disabled="busy">{{ busy ? '正在处理…' : '上传文档' }}<AppIcon name="upload" :size="16" /></el-button></div>

@@ -91,6 +91,9 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
     @Override
     @DistributeLock(scene = "document-upload", keyExpression = "#uploadUser", waitTime = 0)
     public KnowledgeDocument upload(DocumentUploadParam documentUploadParam, String uploadUser) throws IOException {
+        validateCsvKnowledgeBaseType(documentUploadParam.file(),
+                KnowledgeBaseType.valueOf(documentUploadParam.knowledgeBaseType()));
+
         // 计算文件内容hash，用于去重
         String contentHash = calculateContentHash(documentUploadParam.file());
 
@@ -158,12 +161,20 @@ public class DocumentProcessServiceImpl implements DocumentProcessService {
         return convertedDocUrl;
     }
 
+    private void validateCsvKnowledgeBaseType(MultipartFile file, KnowledgeBaseType knowledgeBaseType) {
+        FileType fileType = FileTypeUtil.getFileType(file.getOriginalFilename(), file);
+        if (fileType == FileType.CSV && knowledgeBaseType != KnowledgeBaseType.DATA_QUERY) {
+            throw new IllegalArgumentException("CSV 文件仅支持数据查询类型");
+        }
+    }
+
     @Override
     @DistributeLock(scene = "document-upload", keyExpression = "#uploadUser", waitTime = 0)
     public KnowledgeDocument uploadNewVersion(Long docId, String version, MultipartFile file, String uploadUser, String changelog) throws IOException {
         // 查询文档
         KnowledgeDocument document = knowledgeDocumentService.getById(docId);
         Assert.notNull(document, "文档不存在");
+        validateCsvKnowledgeBaseType(file, document.getKnowledgeBaseType());
 
         // 校验版本号必须大于已有最大版本号
         String latestVersion = knowledgeDocumentVersionService.getLatestVersion(docId);
