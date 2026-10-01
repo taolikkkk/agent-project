@@ -6,6 +6,7 @@ import cn.hollis.llm.mentor.know.engine.document.entity.KnowledgeDocument;
 import cn.hollis.llm.mentor.know.engine.document.entity.KnowledgeDocumentVersion;
 import cn.hollis.llm.mentor.know.engine.auth.service.AuthService;
 import cn.hollis.llm.mentor.know.engine.document.service.DocumentProcessService;
+import cn.hollis.llm.mentor.know.engine.document.service.FileStorageService;
 import cn.hollis.llm.mentor.know.engine.document.service.KnowledgeDocumentService;
 import cn.hollis.llm.mentor.know.engine.document.service.KnowledgeDocumentVersionService;
 import cn.hollis.llm.mentor.know.engine.document.service.VectorStoreService;
@@ -15,10 +16,12 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.net.URI;
 import java.util.List;
 import java.util.Map;
 
@@ -43,6 +46,9 @@ public class KnowledgeDocumentController {
 
     @Autowired
     private AuthService authService;
+
+    @Autowired
+    private FileStorageService fileStorageService;
 
     /**
      * 文件上传接口
@@ -108,6 +114,24 @@ public class KnowledgeDocumentController {
     @GetMapping("/versions/{docId}")
     public List<KnowledgeDocumentVersion> listVersions(@PathVariable Long docId) {
         return knowledgeDocumentVersionService.listByDocId(docId);
+    }
+
+    /**
+     * 跳转到原始文件的临时下载地址，避免依赖 MinIO bucket 的公开读权限。
+     */
+    @GetMapping("/versions/{versionId}/original")
+    public ResponseEntity<Void> openOriginal(@PathVariable Long versionId) {
+        KnowledgeDocumentVersion version = knowledgeDocumentVersionService.getById(versionId);
+        if (version == null || version.getDocUrl() == null || version.getDocUrl().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "原始文件不存在");
+        }
+        try {
+            return ResponseEntity.status(HttpStatus.FOUND)
+                    .location(URI.create(fileStorageService.getDownloadUrl(version.getDocUrl())))
+                    .build();
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "原始文件暂时无法打开", e);
+        }
     }
 
     /**

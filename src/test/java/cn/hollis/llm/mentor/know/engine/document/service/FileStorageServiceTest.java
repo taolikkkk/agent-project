@@ -1,6 +1,7 @@
 package cn.hollis.llm.mentor.know.engine.document.service;
 
 import io.minio.BucketExistsArgs;
+import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
@@ -58,5 +59,25 @@ class FileStorageServiceTest {
         verify(minio).removeObject(deleted.capture());
         assertEquals("knowledge", deleted.getValue().bucket());
         assertEquals("original/guide.md", deleted.getValue().object());
+    }
+
+    @Test
+    void downloadUrlSignsFilesStoredInCurrentMinio() throws Exception {
+        MinioClient minio = mock(MinioClient.class);
+        when(minio.getPresignedObjectUrl(any(GetPresignedObjectUrlArgs.class)))
+                .thenReturn("http://localhost:9000/knowledge/original/guide.md?X-Amz-Signature=test");
+        FileStorageService storage = new FileStorageService();
+        ReflectionTestUtils.setField(storage, "minioClient", minio);
+        ReflectionTestUtils.setField(storage, "bucketName", "knowledge");
+        ReflectionTestUtils.setField(storage, "endpoint", "http://localhost:9000");
+
+        String signed = storage.getDownloadUrl("http://localhost:9000/knowledge/original/guide.md");
+
+        assertTrue(signed.contains("X-Amz-Signature"));
+        ArgumentCaptor<GetPresignedObjectUrlArgs> request = ArgumentCaptor.forClass(GetPresignedObjectUrlArgs.class);
+        verify(minio).getPresignedObjectUrl(request.capture());
+        assertEquals("knowledge", request.getValue().bucket());
+        assertEquals("original/guide.md", request.getValue().object());
+        assertEquals("https://files.example.com/guide.md", storage.getDownloadUrl("https://files.example.com/guide.md"));
     }
 }

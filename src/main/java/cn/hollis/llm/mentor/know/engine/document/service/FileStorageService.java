@@ -136,6 +136,14 @@ public class FileStorageService {
         return true;
     }
 
+    /**
+     * 返回可供浏览器下载的地址。
+     * 当前 MinIO 存储的对象使用临时签名，外部地址保持原样。
+     */
+    public String getDownloadUrl(String url) throws Exception {
+        return isStoredFile(url) ? getPresignedUrl(storedObjectName(url)) : url;
+    }
+
     // 生成临时下载链接（带签名，有效期 7 天）
     public String getPresignedUrl(String objectName) throws Exception {
         return minioClient.getPresignedObjectUrl(
